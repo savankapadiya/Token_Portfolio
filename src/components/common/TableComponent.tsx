@@ -43,7 +43,6 @@ const TableComponent = () => {
     const displayedTokens = useMemo(() => getPaginatedTokens(currentPage, itemsPerPage), [getPaginatedTokens, currentPage, itemsPerPage]);
 
     const handleSave = useCallback((tokenId: string) => {
-        // Update Redux state with temporary value
         updateTokenHolding(tokenId, tempHolding);
         setEditIndex(null);
         setTempHolding('');
@@ -51,17 +50,15 @@ const TableComponent = () => {
 
     const handleEdit = useCallback((idx: number, tokenId: string) => {
         setEditIndex(idx);
-        setTempHolding(holdings[tokenId] || '0.0000');
+        setTempHolding(holdings[tokenId] || '');
     }, [holdings]);
 
     const handleAddTokens = useCallback(async (coinIds: string[]) => {
         await addTokens(coinIds);
-        // Clear selection after adding tokens
         setSelectedTokens([]);
     }, [addTokens]);
 
     const handleRefreshPrices = useCallback(async () => {
-        // Reset to first page when refreshing
         setCurrentPage(1);
         await refreshPortfolio();
     }, [refreshPortfolio]);
@@ -70,7 +67,6 @@ const TableComponent = () => {
         removeTokenFromWatchlist(tokenId);
     }, [removeTokenFromWatchlist]);
 
-    // Calculate pagination info
     const paginationInfo = useMemo(() => {
         const startItem = tokens.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1;
         const endItem = Math.min(startItem + displayedTokens.length - 1, currentPage * itemsPerPage);
@@ -240,12 +236,13 @@ const TableComponent = () => {
                                         {editIndex === idx ? (
                                             <div className="flex gap-2 items-center">
                                                 <Input
-                                                    value={tempHolding}
+                                                    value={tempHolding == '0.0000' ? '' : tempHolding}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                                         setTempHolding(e.target.value);
                                                     }}
                                                     className="w-32 h-8 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] transition-all duration-150 focus:ring-2 focus:ring-[#A9E851]/20"
                                                     type="number"
+                                                    placeholder="Enter Value"
                                                     step="any"
                                                     min="0"
                                                     autoFocus

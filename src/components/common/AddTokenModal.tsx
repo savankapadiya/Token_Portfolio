@@ -37,10 +37,8 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
   const [isAdding, setIsAdding] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Fetch trending coins on modal open
   useEffect(() => {
     if (open) {
-      // Reset state when opening
       setTrendingCoins([]);
       setSearchResults([]);
       setSearch('');
@@ -48,14 +46,11 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       setError(null);
       setIsAdding(false);
       setIsTyping(false);
-      // Fetch trending coins immediately without any delay
       fetchTrendingCoins();
     }
   }, [open]);
 
-  // Debounced search with trending fallback
   useEffect(() => {
-    // Show typing indicator immediately when user starts typing
     if (search.length > 0) {
       setIsTyping(true);
     } else {
@@ -63,20 +58,17 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
     }
 
     const searchTimer = setTimeout(async () => {
-      setIsTyping(false); // Hide typing indicator after debounce
+      setIsTyping(false);
       
       if (search.length === 0) {
-        // When search is cleared, show trending coins again
         setSearchResults([]);
         setIsSearching(false);
         if (trendingCoins.length === 0) {
-          // Fetch trending coins if not already loaded
           fetchTrendingCoins();
         }
         return;
       }
 
-      // Perform search after debounce delay
       setIsSearching(true);
       try {
         const results = await coinGeckoService.searchCoins(search);
@@ -89,7 +81,7 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       } finally {
         setIsSearching(false);
       }
-    }, 300); // 300ms debounce delay for faster response
+    }, 300);
 
     return () => clearTimeout(searchTimer);
   }, [search, trendingCoins.length]);
@@ -127,7 +119,6 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       setIsAdding(true);
       await onAdd(selectedTokens);
       
-      // Reset state and close modal on success
       setSelectedTokens([]);
       setSearch("");
       setSearchResults([]);
