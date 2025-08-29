@@ -54,12 +54,9 @@ export const useReduxPortfolio = () => {
     }
 
     try {
-      console.log('Fetching wallet portfolio value...')
       const portfolioValue = await coinGeckoService.getPortfolioValue(address, 1) // Ethereum mainnet
-      console.log('Wallet portfolio value:', portfolioValue)
       return portfolioValue
     } catch (error) {
-      console.error('Error fetching wallet portfolio:', error)
       return 0
     }
   }
@@ -78,13 +75,13 @@ export const useReduxPortfolio = () => {
     if (isConnected && address) {
       // Add wallet operations in parallel
       promises.push(
-        getWalletPortfolioValue().catch(error => {
-          console.error('Error fetching wallet portfolio:', error)
+        getWalletPortfolioValue().catch(() => {
+          // Handle error silently
         })
       )
       promises.push(
-        refetchBalance().catch(error => {
-          console.error('Error fetching wallet balance:', error)
+        refetchBalance().catch(() => {
+          // Handle error silently
         })
       )
     }

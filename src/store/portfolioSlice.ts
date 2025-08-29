@@ -73,7 +73,7 @@ const saveToStorage = <T>(key: string, value: T): void => {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch (error) {
-    console.error(`Failed to save ${key} to localStorage:`, error)
+    // Handle localStorage save error silently
   }
 }
 

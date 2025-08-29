@@ -1,479 +1,479 @@
-class CoinGeckoService {
-  private apiKey: string | undefined
-  private proApiKey: string | undefined
-  private baseUrl: string
-  private proBaseUrl: string
-  private walletTokens: any[]
-  private walletCallbacks: Set<Function>
-  private cache: Map<string, { data: any; timestamp: number }> = new Map()
-  private requestQueue: Array<{ url: string; resolve: Function; reject: Function }> = []
-  private isProcessingQueue = false
-  private lastRequestTime = 0
-  private readonly RATE_LIMIT_DELAY = 6000 // 6 seconds between requests (more conservative for free tier)
-  private readonly CACHE_DURATION = 600000 // 10 minute cache (longer cache to reduce requests)
+// Module-level state variables (replacing class instance variables)
+let apiKey: string | undefined
+let proApiKey: string | undefined
+let baseUrl: string
+let proBaseUrl: string
+let walletTokens: any[] = []
+let walletCallbacks: Set<Function> = new Set()
+let cache: Map<string, { data: any; timestamp: number }> = new Map()
+let searchCache: Map<string, { data: any; timestamp: number }> = new Map()
+let requestQueue: Array<{ url: string; resolve: Function; reject: Function }> = []
+let isProcessingQueue = false
+let lastRequestTime = 0
+let rateLimitedTimestamp = 0
 
-  constructor() {
-    this.apiKey = import.meta.env.VITE_COINGECKO_API_KEY;
-    this.proApiKey = import.meta.env.VITE_COINGECKO_PRO_API_KEY;
-    this.baseUrl = 'https://api.coingecko.com/api/v3';
-    this.proBaseUrl = 'https://pro-api.coingecko.com/api/v3';
-    this.walletTokens = [];
-    this.walletCallbacks = new Set();
+// Constants
+const RATE_LIMIT_DELAY = 6000 // 6 seconds between requests (more conservative for free tier)
+const CACHE_DURATION = 600000 // 10 minute cache (longer cache to reduce requests)
+const SEARCH_CACHE_DURATION = 300000 // 5 minute cache for search results
+
+// Initialize configuration
+const initializeConfig = () => {
+  apiKey = import.meta.env.VITE_COINGECKO_API_KEY;
+  proApiKey = import.meta.env.VITE_COINGECKO_PRO_API_KEY;
+  baseUrl = 'https://api.coingecko.com/api/v3';
+  proBaseUrl = 'https://pro-api.coingecko.com/api/v3';
+}
+
+// Initialize on module load
+initializeConfig()
+
+// Wallet state management
+export const onWalletChange = (callback: Function) => {
+  walletCallbacks.add(callback);
+  return () => walletCallbacks.delete(callback);
+}
+
+export const notifyWalletChange = (walletData: any) => {
+  walletCallbacks.forEach(callback => callback(walletData));
+}
+
+// Chain ID to network mapping for CoinGecko
+export const getNetworkFromChainId = (chainId: number): string => {
+  const chainMap: { [key: number]: string } = {
+    1: 'ethereum',      // Ethereum Mainnet
+    137: 'polygon-pos', // Polygon
+    42161: 'arbitrum-one', // Arbitrum
+    10: 'optimistic-ethereum', // Optimism
+    8453: 'base',       // Base
+    56: 'binance-smart-chain', // BSC
+    250: 'fantom',      // Fantom
+    43114: 'avalanche'  // Avalanche
+  };
+  return chainMap[chainId] || 'ethereum';
+}
+
+const getApiUrl = (endpoint: string, isProEndpoint = false): string => {
+  const currentBaseUrl = isProEndpoint && proApiKey ? proBaseUrl : baseUrl;
+  const apiKeyParam = isProEndpoint && proApiKey 
+    ? `x_cg_pro_api_key=${proApiKey}`
+    : apiKey ? `x_cg_demo_api_key=${apiKey}` : '';
+  
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return apiKeyParam ? `${currentBaseUrl}${endpoint}${separator}${apiKeyParam}` : `${currentBaseUrl}${endpoint}`;
+}
+
+const getCacheKey = (url: string): string => {
+  return url;
+}
+
+const isCacheValid = (timestamp: number): boolean => {
+  return Date.now() - timestamp < CACHE_DURATION;
+}
+
+const rateLimitedFetch = async (url: string): Promise<Response> => {
+  return new Promise((resolve, reject) => {
+    requestQueue.push({ url, resolve, reject });
+    processQueue();
+  });
+}
+
+const processQueue = async (): Promise<void> => {
+  if (isProcessingQueue || requestQueue.length === 0) {
+    return;
   }
 
-  // Wallet state management
-  onWalletChange(callback: Function) {
-    this.walletCallbacks.add(callback);
-    return () => this.walletCallbacks.delete(callback);
-  }
+  isProcessingQueue = true;
 
-  notifyWalletChange(walletData: any) {
-    this.walletCallbacks.forEach(callback => callback(walletData));
-  }
-
-  // Chain ID to network mapping for CoinGecko
-  getNetworkFromChainId(chainId: number): string {
-    const chainMap: { [key: number]: string } = {
-      1: 'ethereum',      // Ethereum Mainnet
-      137: 'polygon-pos', // Polygon
-      42161: 'arbitrum-one', // Arbitrum
-      10: 'optimistic-ethereum', // Optimism
-      8453: 'base',       // Base
-      56: 'binance-smart-chain', // BSC
-      250: 'fantom',      // Fantom
-      43114: 'avalanche'  // Avalanche
-    };
-    return chainMap[chainId] || 'ethereum';
-  }
-
-  private _getApiUrl(endpoint: string, isProEndpoint = false): string {
-    const baseUrl = isProEndpoint && this.proApiKey ? this.proBaseUrl : this.baseUrl;
-    const apiKeyParam = isProEndpoint && this.proApiKey 
-      ? `x_cg_pro_api_key=${this.proApiKey}`
-      : this.apiKey ? `x_cg_demo_api_key=${this.apiKey}` : '';
+  while (requestQueue.length > 0) {
+    const { url, resolve, reject } = requestQueue.shift()!;
     
-    const separator = endpoint.includes('?') ? '&' : '?';
-    return apiKeyParam ? `${baseUrl}${endpoint}${separator}${apiKeyParam}` : `${baseUrl}${endpoint}`;
-  }
-
-  private getCacheKey(url: string): string {
-    return url;
-  }
-
-  private isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < this.CACHE_DURATION;
-  }
-
-  private async rateLimitedFetch(url: string): Promise<Response> {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({ url, resolve, reject });
-      this.processQueue();
-    });
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessingQueue = true;
-
-    while (this.requestQueue.length > 0) {
-      const { url, resolve, reject } = this.requestQueue.shift()!;
-      
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
-      
-      if (timeSinceLastRequest < this.RATE_LIMIT_DELAY) {
-        await new Promise(res => setTimeout(res, this.RATE_LIMIT_DELAY - timeSinceLastRequest));
-      }
-
-      try {
-        const response = await this.fetchWithRetry(url);
-        this.lastRequestTime = Date.now();
-        resolve(response);
-      } catch (error) {
-        reject(error);
-      }
-    }
-
-    this.isProcessingQueue = false;
-  }
-
-  private async fetchWithRetry(url: string, maxRetries = 5, baseBackoffMs = 2000): Promise<Response> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(url);
-        
-        if (response.status === 429) {
-          this.markRateLimited(); // Mark that we've been rate limited
-          
-          if (attempt === maxRetries) {
-            console.error(`Rate limited after ${maxRetries} attempts. Consider getting a CoinGecko API key.`);
-            throw new Error(`Rate limited after ${maxRetries} attempts`);
-          }
-          
-          // More aggressive backoff for 429 errors
-          const delay = baseBackoffMs * Math.pow(2, attempt) + Math.random() * 2000;
-          console.log(`⚠️ Rate limited (429), waiting ${Math.round(delay/1000)}s before retry ${attempt + 1}/${maxRetries}`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        return response;
-      } catch (error) {
-        if (attempt === maxRetries) {
-          throw error;
-        }
-        
-        const delay = baseBackoffMs * Math.pow(1.5, attempt);
-        console.log(`Request failed, retrying in ${Math.round(delay/1000)}s... (${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
     
-    throw new Error('Max retries exceeded');
-  }
-
-  private async cachedFetch(url: string): Promise<any> {
-    const cacheKey = this.getCacheKey(url);
-    const cached = this.cache.get(cacheKey);
-    
-    console.log(`🔍 Cache check for: ${url}`);
-    
-    if (cached && this.isCacheValid(cached.timestamp)) {
-      console.log('✅ Using cached data (still valid)');
-      return cached.data;
-    }
-
-    if (cached) {
-      console.log('⏰ Cache expired, fetching fresh data');
-    } else {
-      console.log('🆕 No cache found, fetching fresh data');
+    if (timeSinceLastRequest < RATE_LIMIT_DELAY) {
+      await new Promise(res => setTimeout(res, RATE_LIMIT_DELAY - timeSinceLastRequest));
     }
 
     try {
-      console.log('📞 Making API request...');
-      const response = await this.rateLimitedFetch(url);
+      const response = await fetchWithRetry(url);
+      lastRequestTime = Date.now();
+      resolve(response);
+    } catch (error) {
+      reject(error);
+    }
+  }
+
+  isProcessingQueue = false;
+}
+
+const fetchWithRetry = async (url: string, maxRetries = 5, baseBackoffMs = 2000): Promise<Response> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url);
       
-      console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+      if (response.status === 429) {
+        markRateLimited(); // Mark that we've been rate limited
+        
+        if (attempt === maxRetries) {
+          throw new Error(`Rate limited after ${maxRetries} attempts`);
+        }
+        
+        // More aggressive backoff for 429 errors
+        const delay = baseBackoffMs * Math.pow(2, attempt) + Math.random() * 2000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      return response;
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      const delay = baseBackoffMs * Math.pow(1.5, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+const cachedFetch = async (url: string): Promise<any> => {
+  const cacheKey = getCacheKey(url);
+  const cached = cache.get(cacheKey);
+  
+  if (cached && isCacheValid(cached.timestamp)) {
+    return cached.data;
+  }
+
+  try {
+    const response = await rateLimitedFetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    cache.set(cacheKey, {
+      data,
+      timestamp: Date.now()
+    });
+    
+    return data;
+  } catch (error) {
+    if (cached) {
+      return cached.data;
+    }
+    
+    throw error;
+  }
+}
+
+export const getTokenPriceData = async (tokenAddresses: string | string[], network = 'ethereum') => {
+  try {
+    const addresses = Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses];
+    const results: any = {};
+    
+    // CoinGecko free plan only allows 1 contract address per request
+    for (const address of addresses) {
+      try {
+        const endpoint = `/simple/token_price/${network}?contract_addresses=${address}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true`;
+        const url = getApiUrl(endpoint, false);
+        
+        const data = await cachedFetch(url);
+        
+        if (data && typeof data === 'object') {
+          Object.assign(results, data);
+        }
+      } catch (error) {
+        // Continue with other addresses even if one fails
+        continue;
+      }
+    }
+    
+    return Object.keys(results).length > 0 ? results : undefined;
+  } catch (error) {
+    return undefined;
+  }
+}
+
+export const getTrendingCoins = async () => {
+  try {
+    const endpoint = '/search/trending';
+    const url = getApiUrl(endpoint, false);
+    
+    // Check cache first
+    const cacheKey = getCacheKey(url);
+    const cached = cache.get(cacheKey);
+    
+    if (cached && isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+    
+    // For trending coins, make direct fetch without rate limiting to ensure instant response
+    try {
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('📦 Data received and parsed successfully');
       
-      this.cache.set(cacheKey, {
+      // Cache the result
+      cache.set(cacheKey, {
         data,
         timestamp: Date.now()
       });
       
       return data;
-    } catch (error) {
-      console.error('❌ Fetch error:', error);
+    } catch (fetchError) {
+      // Fallback to rate-limited fetch if direct fetch fails
+      const data = await cachedFetch(url);
       
-      if (cached) {
-        console.log('🔄 Using stale cached data due to fetch error');
-        return cached.data;
-      }
-      
-      throw error;
-    }
-  }
-
-  async getTokenPriceData(tokenAddresses: string | string[], network = 'ethereum') {
-    try {
-      const addresses = Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses];
-      const results: any = {};
-      
-      console.log(`Fetching token price data for ${addresses.length} addresses (1 per request - CoinGecko free plan limit)...`);
-      
-      // CoinGecko free plan only allows 1 contract address per request
-      for (const address of addresses) {
-        try {
-          const endpoint = `/simple/token_price/${network}?contract_addresses=${address}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true`;
-          const url = this._getApiUrl(endpoint, false);
-          
-          console.log(`Fetching price for token: ${address}`);
-          const data = await this.cachedFetch(url);
-          
-          if (data && typeof data === 'object') {
-            Object.assign(results, data);
-            console.log(`✅ Token price fetched for: ${address}`);
-          } else {
-            console.log(`❌ No data returned for: ${address}`);
-          }
-        } catch (error) {
-          console.error(`❌ Error fetching data for address ${address}:`, error);
-          
-          // Continue with other addresses even if one fails
-          continue;
-        }
-      }
-      
-      const successCount = Object.keys(results).length;
-      console.log(`Token price data complete: ${successCount}/${addresses.length} tokens fetched successfully`);
-      
-      return Object.keys(results).length > 0 ? results : undefined;
-    } catch (error) {
-      console.error(`Error fetching token price data: ${error}`);
-      return undefined;
-    }
-  }
-
-  async getTrendingCoins() {
-    try {
-      const endpoint = '/search/trending';
-      const url = this._getApiUrl(endpoint, false);
-      
-      console.log('🔗 Full trending API URL:', url);
-      console.log('📡 Fetching trending coins from API...');
-      
-      // Check cache first
-      const cacheKey = this.getCacheKey(url);
-      const cached = this.cache.get(cacheKey);
-      
-      if (cached && this.isCacheValid(cached.timestamp)) {
-        console.log('✅ Using cached trending data');
-        return cached.data;
-      }
-      
-      // For trending coins, make direct fetch without rate limiting to ensure instant response
-      try {
-        console.log('📞 Making direct API request for trending coins...');
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('📦 Trending data received and parsed successfully');
-        
-        // Cache the result
-        this.cache.set(cacheKey, {
-          data,
-          timestamp: Date.now()
-        });
-        
-        if (data?.coins) {
-          console.log(`✅ Trending coins fetched: ${data.coins.length} trending tokens`);
-          console.log('📋 First trending coin:', data.coins[0]?.item);
-        } else {
-          console.log('❌ No coins data in response:', data);
-        }
-        
-        return data;
-      } catch (fetchError) {
-        console.error('❌ Direct fetch failed, falling back to rate-limited fetch:', fetchError);
-        
-        // Fallback to rate-limited fetch if direct fetch fails
-        const data = await this.cachedFetch(url);
-        
-        if (data?.coins) {
-          console.log(`✅ Trending coins fetched (fallback): ${data.coins.length} trending tokens`);
-        }
-        
-        return data;
-      }
-      
-    } catch (error) {
-      console.error(`❌ Error fetching trending coins:`, error);
-      return undefined;
-    }
-  }
-
-  async getAllCryptocurrencies(page = 1, perPage = 10) {
-    try {
-      const endpoint = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&sparkline=false&price_change_percentage=24h`;
-      const url = this._getApiUrl(endpoint, false);
-      
-      const data = await this.cachedFetch(url);
       return data;
-    } catch (error) {
-      console.log(`Error fetching all cryptocurrencies: ${error}`);
-      return undefined;
     }
-  }
-
-  async searchCoins(query: string) {
-    try {
-      const endpoint = `/search?query=${encodeURIComponent(query)}`;
-      const url = this._getApiUrl(endpoint, false);
-      
-      const data = await this.cachedFetch(url);
-      return data.coins || [];
-    } catch (error) {
-      console.log(`Error searching coins: ${error}`);
-      return [];
-    }
-  }
-
-  // Wallet-aware methods
-  async getWalletTokenBalances(_walletAddress: string, chainId: number) {
-    try {
-      const network = this.getNetworkFromChainId(chainId);
-      
-      // This would typically integrate with a blockchain RPC or service like Alchemy/Infura
-      // For now, we'll simulate wallet token discovery
-      const mockWalletTokens = [
-        '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
-        '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT
-        '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC
-        '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'  // UNI
-      ];
-
-      const tokenPrices = await this.getTokenPriceData(mockWalletTokens, network);
-      
-      if (tokenPrices) {
-        this.walletTokens = mockWalletTokens.map(address => ({
-          address,
-          network,
-          priceData: tokenPrices[address.toLowerCase()],
-          balance: Math.random() * 100 // Mock balance
-        }));
-        
-        return this.walletTokens;
-      }
-      
-      return [];
-    } catch (error) {
-      console.log(`Error fetching wallet token balances: ${error}`);
-      return [];
-    }
-  }
-
-  async getPortfolioValue(walletAddress: string, chainId: number): Promise<number> {
-    const tokens = await this.getWalletTokenBalances(walletAddress, chainId);
-    return tokens.reduce((total, token) => {
-      const price = token.priceData?.usd || 0;
-      return total + (price * token.balance);
-    }, 0);
-  }
-
-  // Enhanced token data with wallet context
-  async getTokenDataWithWalletInfo(tokenAddresses: string | string[], network = 'ethereum', walletAddress: string | null = null) {
-    const priceData = await this.getTokenPriceData(tokenAddresses, network);
     
-    if (!priceData) return null;
-
-    const tokensWithInfo = Object.entries(priceData).map(([address, data]) => ({
-      address,
-      network,
-      priceData: data,
-      isInWallet: walletAddress ? this.walletTokens.some(t => 
-        t.address.toLowerCase() === address.toLowerCase()
-      ) : false,
-      walletBalance: walletAddress ? this.getWalletTokenBalance(address) : 0
-    }));
-
-    return tokensWithInfo;
-  }
-
-  getWalletTokenBalance(tokenAddress: string): number {
-    const token = this.walletTokens.find(t => 
-      t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    return token?.balance || 0;
-  }
-
-  // Get market data for table list
-  async getMarketData(page = 1, perPage = 10, forceRefresh = false): Promise<any[]> {
-    try {
-      // Reduce request size if we've been rate limited recently
-      const adjustedPerPage = this.hasBeenRateLimited() ? Math.min(perPage, 50) : perPage;
-      
-      const endpoint = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${adjustedPerPage}&page=${page}&sparkline=false&price_change_percentage=24h`;
-      const url = this._getApiUrl(endpoint, false);
-      
-      console.log(`Fetching market data from API: ${url}`);
-      
-      if (forceRefresh) {
-        // Clear cache for this URL when force refreshing
-        const cacheKey = this.getCacheKey(url);
-        this.cache.delete(cacheKey);
-        console.log('Cache cleared for market data refresh');
-        
-        // For force refresh, use direct fetch to avoid rate limiting delay
-        try {
-          console.log('🚀 Making immediate API request for refresh...');
-          const response = await fetch(url);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`✅ Immediate refresh successful: ${data?.length || 0} coins`);
-            
-            // Update cache with fresh data
-            this.cache.set(cacheKey, {
-              data,
-              timestamp: Date.now()
-            });
-            
-            return data;
-          } else if (response.status === 429) {
-            console.log('⚠️ Rate limited on immediate refresh, falling back to cached/rate-limited fetch');
-            // Fall through to rate-limited fetch below
-          } else {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-        } catch (directFetchError) {
-          console.log('❌ Direct fetch failed, falling back to rate-limited fetch:', directFetchError);
-          // Fall through to rate-limited fetch below
-        }
-      }
-      
-      const data = await this.cachedFetch(url);
-      console.log(`Market data fetched: ${data?.length || 0} coins`);
-      return data;
-    } catch (error: any) {
-      console.error(`Error fetching market data: ${error}`);
-      
-      // If we get rate limited (429 or rate limit error), try with smaller request and longer delay
-      if ((error?.message?.includes('Rate limited') || error?.message?.includes('429')) && perPage > 20) {
-        console.log('Rate limited - retrying with smaller request size after longer delay...');
-        
-        // Wait longer before retry for rate limit
-        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 second delay
-        
-        return this.getMarketData(page, Math.floor(perPage / 2), forceRefresh);
-      }
-      
-      return [];
-    }
-  }
-
-  private rateLimitedTimestamp = 0;
-  
-  private hasBeenRateLimited(): boolean {
-    return Date.now() - this.rateLimitedTimestamp < 60000; // Within last minute
-  }
-
-  private markRateLimited(): void {
-    this.rateLimitedTimestamp = Date.now();
-  }
-
-  // Get coin data by IDs (for watchlist tokens) - now uses market data API
-  async getCoinsByIds(ids: string[]) {
-    try {
-      // For now, get top market coins and filter by IDs if needed
-      // This uses the market API endpoint you specified
-      const idsString = ids.join(',');
-      const endpoint = `/coins/markets?ids=${idsString}&vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=24h`;
-      const url = this._getApiUrl(endpoint, false);
-      
-      const data = await this.cachedFetch(url);
-      return data;
-    } catch (error) {
-      console.log(`Error fetching coins by IDs: ${error}`);
-      return [];
-    }
+  } catch (error) {
+    return undefined;
   }
 }
 
-export const coinGeckoService = new CoinGeckoService();
+export const getAllCryptocurrencies = async (page = 1, perPage = 10) => {
+  try {
+    const endpoint = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&sparkline=false&price_change_percentage=24h`;
+    const url = getApiUrl(endpoint, false);
+    
+    const data = await cachedFetch(url);
+    return data;
+  } catch (error) {
+    return undefined;
+  }
+}
+
+export const searchCoins = async (query: string) => {
+  try {
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    // Check search cache first for instant response
+    const searchCacheKey = `search:${normalizedQuery}`;
+    const searchCached = searchCache.get(searchCacheKey);
+    
+    if (searchCached && Date.now() - searchCached.timestamp < SEARCH_CACHE_DURATION) {
+      return searchCached.data;
+    }
+    
+    const endpoint = `/search?query=${encodeURIComponent(query)}`;
+    const url = getApiUrl(endpoint, false);
+    
+    // For search, make direct fetch without rate limiting for instant response
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const coins = data.coins || [];
+      
+      // Cache in both regular cache and search cache
+      searchCache.set(searchCacheKey, {
+        data: coins,
+        timestamp: Date.now()
+      });
+      
+      // Also cache the full API response
+      cache.set(getCacheKey(url), {
+        data,
+        timestamp: Date.now()
+      });
+      
+      return coins;
+    } catch (fetchError) {
+      // Fallback to search cache if available
+      if (searchCached) {
+        return searchCached.data;
+      }
+      
+      // Fallback to regular cache
+      const cached = cache.get(getCacheKey(url));
+      if (cached && cached.data) {
+        return cached.data.coins || [];
+      }
+      
+      throw fetchError;
+    }
+    
+  } catch (error) {
+    return [];
+  }
+}
+
+// Wallet-aware methods
+export const getWalletTokenBalances = async (_walletAddress: string, chainId: number) => {
+  try {
+    const network = getNetworkFromChainId(chainId);
+    
+    // This would typically integrate with a blockchain RPC or service like Alchemy/Infura
+    // For now, we'll simulate wallet token discovery
+    const mockWalletTokens = [
+      '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
+      '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT
+      '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC
+      '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'  // UNI
+    ];
+
+    const tokenPrices = await getTokenPriceData(mockWalletTokens, network);
+    
+    if (tokenPrices) {
+      walletTokens = mockWalletTokens.map(address => ({
+        address,
+        network,
+        priceData: tokenPrices[address.toLowerCase()],
+        balance: Math.random() * 100 // Mock balance
+      }));
+      
+      return walletTokens;
+    }
+    
+    return [];
+  } catch (error) {
+    return [];
+  }
+}
+
+export const getPortfolioValue = async (walletAddress: string, chainId: number): Promise<number> => {
+  const tokens = await getWalletTokenBalances(walletAddress, chainId);
+  return tokens.reduce((total, token) => {
+    const price = token.priceData?.usd || 0;
+    return total + (price * token.balance);
+  }, 0);
+}
+
+// Enhanced token data with wallet context
+export const getTokenDataWithWalletInfo = async (tokenAddresses: string | string[], network = 'ethereum', walletAddress: string | null = null) => {
+  const priceData = await getTokenPriceData(tokenAddresses, network);
+  
+  if (!priceData) return null;
+
+  const tokensWithInfo = Object.entries(priceData).map(([address, data]) => ({
+    address,
+    network,
+    priceData: data,
+    isInWallet: walletAddress ? walletTokens.some(t => 
+      t.address.toLowerCase() === address.toLowerCase()
+    ) : false,
+    walletBalance: walletAddress ? getWalletTokenBalance(address) : 0
+  }));
+
+  return tokensWithInfo;
+}
+
+export const getWalletTokenBalance = (tokenAddress: string): number => {
+  const token = walletTokens.find(t => 
+    t.address.toLowerCase() === tokenAddress.toLowerCase()
+  );
+  return token?.balance || 0;
+}
+
+// Get market data for table list
+export const getMarketData = async (page = 1, perPage = 10, forceRefresh = false): Promise<any[]> => {
+  try {
+    // Reduce request size if we've been rate limited recently
+    const adjustedPerPage = hasBeenRateLimited() ? Math.min(perPage, 50) : perPage;
+    
+    const endpoint = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${adjustedPerPage}&page=${page}&sparkline=false&price_change_percentage=24h`;
+    const url = getApiUrl(endpoint, false);
+    
+    if (forceRefresh) {
+      // Clear cache for this URL when force refreshing
+      const cacheKey = getCacheKey(url);
+      cache.delete(cacheKey);
+      
+      // For force refresh, use direct fetch to avoid rate limiting delay
+      try {
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Update cache with fresh data
+          cache.set(cacheKey, {
+            data,
+            timestamp: Date.now()
+          });
+          
+          return data;
+        } else if (response.status === 429) {
+          // Fall through to rate-limited fetch below
+        } else {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      } catch (directFetchError) {
+        // Fall through to rate-limited fetch below
+      }
+    }
+    
+    const data = await cachedFetch(url);
+    return data;
+  } catch (error: any) {
+    // If we get rate limited (429 or rate limit error), try with smaller request and longer delay
+    if ((error?.message?.includes('Rate limited') || error?.message?.includes('429')) && perPage > 20) {
+      
+      // Wait longer before retry for rate limit
+      await new Promise(resolve => setTimeout(resolve, 10000)); // 10 second delay
+      
+      return getMarketData(page, Math.floor(perPage / 2), forceRefresh);
+    }
+    
+    return [];
+  }
+}
+
+const hasBeenRateLimited = (): boolean => {
+  return Date.now() - rateLimitedTimestamp < 60000; // Within last minute
+}
+
+const markRateLimited = (): void => {
+  rateLimitedTimestamp = Date.now();
+}
+
+// Get coin data by IDs (for watchlist tokens) - now uses market data API
+export const getCoinsByIds = async (ids: string[]) => {
+  try {
+    // For now, get top market coins and filter by IDs if needed
+    // This uses the market API endpoint you specified
+    const idsString = ids.join(',');
+    const endpoint = `/coins/markets?ids=${idsString}&vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=24h`;
+    const url = getApiUrl(endpoint, false);
+    
+    const data = await cachedFetch(url);
+    return data;
+  } catch (error) {
+    return [];
+  }
+}
+
+// Legacy export for backward compatibility - create an object with all the functions
+export const coinGeckoService = {
+  onWalletChange,
+  notifyWalletChange,
+  getNetworkFromChainId,
+  getTokenPriceData,
+  getTrendingCoins,
+  getAllCryptocurrencies,
+  searchCoins,
+  getWalletTokenBalances,
+  getPortfolioValue,
+  getTokenDataWithWalletInfo,
+  getWalletTokenBalance,
+  getMarketData,
+  getCoinsByIds
+}

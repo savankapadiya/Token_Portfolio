@@ -9,8 +9,6 @@ export const WalletConnectModal: React.FC = () => {
   const { isConnected, address } = useAccount()
   const { disconnect } = useDisconnect()
 
-  console.log('connectors',connectors)
-
   const handleWalletConnect = (connector: any) => {
     connect({ connector })
     setIsOpen(false)
