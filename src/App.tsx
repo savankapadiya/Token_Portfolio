@@ -1,11 +1,14 @@
-import React from 'react'
+import { Provider } from 'react-redux'
+import { store } from '@/store'
 import Home from './components/pages/Home'
 
 const App = () => {
   return (
-   <div>
-    <Home />
-   </div>
+    <Provider store={store}>
+      <div>
+        <Home />
+      </div>
+    </Provider>
   )
 }
 

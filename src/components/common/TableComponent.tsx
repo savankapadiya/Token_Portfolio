@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-    Pencil,
     Trash2,
     MoreVertical,
     Star,
@@ -16,112 +15,74 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import fileThumb1 from '@/assets/file-thumbnails-1.png'; import fileThumb2 from '@/assets/file-thumbnails-2.png'; import fileThumb3 from '@/assets/file-thumbnails-3.png'; import fileThumb4 from '@/assets/file-thumbnails-4.png';
 import AddTokenModal from "./AddTokenModal";
-import { useWatchlist } from "@/hooks/useWatchlist";
-import { usePortfolio } from "@/hooks/usePortfolio";
-// Example sparkline data
-const sampleData = [
-    { value: 10 },
-    { value: 12 },
-    { value: 9 },
-    { value: 15 },
-    { value: 18 },
-    { value: 16 },
-    { value: 20 },
-];
-
-const tokens = [
-    {
-        icon: fileThumb1,
-        name: 'Ethereum (ETH)',
-        price: '$43,250.67',
-        change: '+2.30%',
-        spark: sampleData,
-        holdings: '0.0500',
-        value: '$2,162.53',
-    },
-    {
-        icon: fileThumb2,
-        name: 'Bitcoin (BTC)',
-        price: '$2,654.32',
-        change: '-1.20%',
-        spark: sampleData,
-        holdings: '2.5000',
-        value: '$6,635.80',
-    },
-    {
-        icon: fileThumb3,
-        name: 'Solana (SOL)',
-        price: '$98.45',
-        change: '+4.70%',
-        spark: sampleData,
-        holdings: '2.5000',
-        value: '$1,476.75',
-    },
-    {
-        icon: fileThumb4,
-        name: 'Dogecoin (DOGE)',
-        price: '$43,250.67',
-        change: '+2.30%',
-        spark: sampleData,
-        holdings: '0.0500',
-        value: '$2,162.53',
-    },
-    {
-        icon: fileThumb2,
-        name: 'USDC',
-        price: '$2,654.32',
-        change: '-1.20%',
-        spark: sampleData,
-        holdings: '2.5000',
-        value: '$6,635.80',
-    },
-    {
-        icon: fileThumb4,
-        name: 'Stellar (XLM)',
-        price: '$98.45',
-        change: '+4.70%',
-        spark: sampleData,
-        holdings: '15.0000',
-        value: '$1,476.75',
-    },
-];
+import { useReduxPortfolio } from "@/hooks/useReduxPortfolio";
 
 const TableComponent = () => {
     const [editIndex, setEditIndex] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [tempHolding, setTempHolding] = useState<string>('');
+    const itemsPerPage = 10;
     
     const {
-        tokenList,
+        tokens,
         holdings,
-        isLoading: watchlistLoading,
+        isLoading,
         error,
         addTokens,
-        removeToken,
-        updateHolding,
-        refreshPrices
-    } = useWatchlist(tokens);
+        updateTokenHolding,
+        removeTokenFromWatchlist,
+        refreshPortfolio,
+        getPaginatedTokens,
+        getTotalPages
+    } = useReduxPortfolio();
 
-    const { refreshPortfolio, isLoading: portfolioLoading } = usePortfolio();
+    const totalPages = getTotalPages(itemsPerPage);
+    const displayedTokens = getPaginatedTokens(currentPage, itemsPerPage);
 
-    const handleSave = (idx: number) => {
+    const handleSave = (tokenId: string) => {
+        // Update Redux state with temporary value
+        updateTokenHolding(tokenId, tempHolding);
         setEditIndex(null);
-        console.log("Saved value:", holdings[idx]);
-        // Value is automatically saved to localStorage via the hook
+        setTempHolding('');
+        console.log("Saved value for token:", tokenId, "Value:", tempHolding);
     };
+
+    const handleEdit = (idx: number, tokenId: string) => {
+        setEditIndex(idx);
+        setTempHolding(holdings[tokenId] || '0.0000');
+    };
+
 
     const handleAddTokens = async (coinIds: string[]) => {
         await addTokens(coinIds);
     };
 
     const handleRefreshPrices = async () => {
-        await refreshPrices();
+        // Reset to first page when refreshing
+        setCurrentPage(1);
         await refreshPortfolio();
     };
 
-    const handleRemoveToken = (idx: number) => {
-        removeToken(idx);
+    const handleRemoveToken = (tokenId: string) => {
+        removeTokenFromWatchlist(tokenId);
+    };
+
+    // Calculate pagination info
+    const startItem = tokens.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1;
+    const endItem = Math.min(startItem + displayedTokens.length - 1, currentPage * itemsPerPage);
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(prev => prev - 1);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages) {
+            setCurrentPage(prev => prev + 1);
+        }
     };
 
     return (
@@ -137,10 +98,10 @@ const TableComponent = () => {
                         variant="outline"
                         className="bg-[#27272A] text-white border border-[#333] hover:bg-[#27272A] hover:text-white"
                         onClick={handleRefreshPrices}
-                        disabled={watchlistLoading || portfolioLoading}
+                        disabled={isLoading}
                     >
-                        <RefreshCw size={15} className={`text-[#A1A1AA] ${(watchlistLoading || portfolioLoading) ? 'animate-spin' : ''}`} />
-                        {(watchlistLoading || portfolioLoading) ? 'Refreshing...' : 'Refresh Prices'}
+                        <RefreshCw size={15} className={`text-[#A1A1AA] ${isLoading ? 'animate-spin' : ''}`} />
+                        {isLoading ? 'Refreshing...' : 'Refresh Prices'}
                     </Button>
                     <Button className="bg-[#A9E851] text-black font-semibold hover:bg-[#A9E851]/80 hover:text-black" onClick={() => setIsModalOpen(true)}>
                         <Plus size={15} /> Add Token
@@ -162,9 +123,10 @@ const TableComponent = () => {
                         </tr>
                     </thead>
                     <tbody className="bg-[#212124] text-white">
-                        {tokenList.map((token, idx) => (
+                        {displayedTokens.map((token, idx) => {
+                            return (
                             <tr
-                                key={token.name}
+                                key={token.id}
                                 className="border-b border-[#27272A] hover:bg-[#232328] transition"
                             >
                                 <td className="py-3 px-4 flex items-center gap-2 max-w-[300px]">
@@ -203,25 +165,30 @@ const TableComponent = () => {
                                     {editIndex === idx ? (
                                         <div className="flex gap-2 items-center">
                                             <Input
-                                                value={holdings[idx]}
+                                                value={tempHolding}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                                    updateHolding(idx, e.target.value);
+                                                    setTempHolding(e.target.value);
                                                 }}
-                                                className="w-24 h-8"
+                                                className="w-32 h-8 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                                type="number"
+                                                step="any"
+                                                min="0"
                                             />
                                             <Button
                                                 size="sm"
-                                                onClick={() => handleSave(idx)}
+                                                onClick={() => handleSave(token.id)}
                                                 className="bg-[#A9E851] hover:bg-[#A9E851]/80 text-[13px] hover:text-black text-black px-2"
                                             >
                                                 Save
                                             </Button>
                                         </div>
                                     ) : (
-                                        holdings[idx]
+                                        holdings[token.id] || '0.0000'
                                     )}
                                 </td>
-                                <td className="py-3 px-4">{token.value}</td>
+                                <td className="py-3 px-4">
+                                    ${((parseFloat(holdings[token.id] || '0') * token.current_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
                                 <td className="py-3 px-4 relative">
                                     <div className="flex items-center gap-2">
 
@@ -231,13 +198,18 @@ const TableComponent = () => {
                                                     <MoreVertical size={16} className="text-[#A1A1AA]" />
                                                 </button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent className="bg-[#27272A] text-white">
-                                                <DropdownMenuItem onClick={() => setEditIndex(idx)} className="border-b border-[#444]">
-                                                    <Pencil size={14} className="mr-2" /> Edit Holdings
+                                            <DropdownMenuContent className="bg-[#27272A] text-white" side="left" align="start">
+                                                <DropdownMenuItem onClick={() => handleEdit(idx, token.id)} className="border-b border-[#444] text-[#A1A1AA] cursor-pointer hover:bg-[#292d27]">
+                                                    <svg width="14" height="15" viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                                                        <path d="M2.83331 13.5556C2.83331 13.5556 6.03242 13.0507 6.8742 12.2089C7.71598 11.3671 13.3871 5.696 13.3871 5.696C14.1311 4.952 14.1311 3.74578 13.3871 3.00267C12.6431 2.25867 11.4369 2.25867 10.6938 3.00267C10.6938 3.00267 5.02265 8.67378 4.18087 9.51556C3.33909 10.3573 2.8342 13.5564 2.8342 13.5564L2.83331 13.5556Z" stroke="#A1A1AA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        <path d="M6.83332 2.44444H1.05554" stroke="#A1A1AA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        <path d="M3.27776 5.55556H1.05554" stroke="#A1A1AA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                    </svg>
+                                                    Edit Holdings
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
-                                                    className="text-red-400"
-                                                    onClick={() => handleRemoveToken(idx)}
+                                                    className="text-red-400 cursor-pointer hover:bg-[#292d27]"
+                                                    onClick={() => handleRemoveToken(token.id)}
                                                 >
                                                     <Trash2 size={14} className="mr-2" /> Remove
                                                 </DropdownMenuItem>
@@ -246,19 +218,30 @@ const TableComponent = () => {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
 
                 {/* Pagination */}
                 <div className="flex justify-between items-center text-[#A1A1AA] p-4 text-sm">
-                    <span>1 — 10 of 100 results</span>
+                    <span>{startItem} — {endItem} of {tokens.length} results</span>
                     <div className="flex gap-2 items-center">
-                        <span>1 of 10 pages</span>
-                        <Button variant="link" className=" text-[#52525B]">
+                        <span>Page {currentPage} of {totalPages}</span>
+                        <Button 
+                            variant="link" 
+                            className="text-[#A1A1AA] disabled:opacity-50"
+                            onClick={handlePrevPage}
+                            disabled={currentPage === 1 || isLoading}
+                        >
                             Prev
                         </Button>
-                        <Button variant="link" className=" text-[#A1A1AA]">
+                        <Button 
+                            variant="link" 
+                            className="text-[#A1A1AA] disabled:opacity-50"
+                            onClick={handleNextPage}
+                            disabled={currentPage === totalPages || isLoading}
+                        >
                             Next
                         </Button>
                     </div>

@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useBalance } from 'wagmi'
 import { formatEther } from 'viem'
+import { coinGeckoService } from '@/services/coinGeckoService'
 
-export const usePortfolio = () => {
+interface Token {
+  id: string
+  name: string
+  symbol: string
+  current_price: number
+  value: string
+  holdings: string
+}
+
+export const usePortfolio = (tokenList?: Token[]) => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [portfolioTotal, setPortfolioTotal] = useState<string>('$0.00')
   const [isLoading, setIsLoading] = useState(false)
+  const [walletPortfolioValue, setWalletPortfolioValue] = useState<number>(0)
   
   const { address, isConnected } = useAccount()
   const { data: balance, refetch: refetchBalance } = useBalance({
@@ -22,34 +33,76 @@ export const usePortfolio = () => {
     })
   }
 
+  // Calculate portfolio total from watchlist
+  const calculatePortfolioTotal = () => {
+    if (!tokenList || tokenList.length === 0) {
+      return '$0.00'
+    }
+    
+    const total = tokenList.reduce((sum, token) => {
+      const value = parseFloat(token.value.replace('$', '').replace(/,/g, '')) || 0
+      return sum + value
+    }, 0)
+    
+    return `$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  // Get wallet portfolio value from CoinGecko service
+  const getWalletPortfolioValue = async () => {
+    if (!address || !isConnected) {
+      setWalletPortfolioValue(0)
+      return
+    }
+
+    try {
+      console.log('Fetching wallet portfolio value...')
+      const portfolioValue = await coinGeckoService.getPortfolioValue(address, 1) // Ethereum mainnet
+      setWalletPortfolioValue(portfolioValue)
+      console.log('Wallet portfolio value:', portfolioValue)
+    } catch (error) {
+      console.error('Error fetching wallet portfolio:', error)
+      setWalletPortfolioValue(0)
+    }
+  }
+
   // Function to refresh portfolio data
   const refreshPortfolio = async () => {
     setIsLoading(true)
     setLastUpdated(new Date())
     
     if (isConnected && address) {
+      // When wallet is connected, get real portfolio value
+      await getWalletPortfolioValue()
+      
       try {
-        // Refetch wallet balance
+        // Refetch wallet balance for display
         await refetchBalance()
-        
-        // Calculate portfolio total from balance
-        if (balance) {
-          const ethValue = parseFloat(formatEther(balance.value))
-          // Mock ETH price for demo - in real app, fetch from price API
-          const ethPrice = 2654.32
-          const portfolioValue = ethValue * ethPrice
-          setPortfolioTotal(`$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-        }
       } catch (error) {
-        console.error('Error fetching portfolio data:', error)
+        console.error('Error fetching wallet data:', error)
       }
     } else {
-      // Show default value when not connected
-      setPortfolioTotal('$0.00')
+      // When wallet not connected, use watchlist total
+      const calculatedTotal = calculatePortfolioTotal()
+      setPortfolioTotal(calculatedTotal)
     }
     
     setTimeout(() => setIsLoading(false), 1000) // Show loading for UX
   }
+
+  // Update portfolio total when tokenList changes (only if wallet not connected)
+  useEffect(() => {
+    if (!isConnected) {
+      const calculatedTotal = calculatePortfolioTotal()
+      setPortfolioTotal(calculatedTotal)
+    }
+  }, [tokenList, isConnected])
+
+  // Update portfolio total when wallet portfolio value changes
+  useEffect(() => {
+    if (isConnected && walletPortfolioValue > 0) {
+      setPortfolioTotal(`$${walletPortfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    }
+  }, [walletPortfolioValue, isConnected])
 
   // Update timestamp every minute
   useEffect(() => {
@@ -62,16 +115,23 @@ export const usePortfolio = () => {
 
   // Refresh portfolio when wallet connects/disconnects
   useEffect(() => {
-    refreshPortfolio()
-  }, [isConnected, address, balance])
+    if (isConnected && address) {
+      getWalletPortfolioValue()
+    } else {
+      setWalletPortfolioValue(0)
+      const calculatedTotal = calculatePortfolioTotal()
+      setPortfolioTotal(calculatedTotal)
+    }
+  }, [isConnected, address])
 
   return {
-    portfolioTotal,
+    portfolioTotal: isConnected ? `$${walletPortfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : portfolioTotal,
     lastUpdated: formatLastUpdated(lastUpdated),
     isLoading,
     refreshPortfolio,
     isConnected,
     balance: balance ? formatEther(balance.value) : '0',
-    symbol: balance?.symbol || 'ETH'
+    symbol: balance?.symbol || 'ETH',
+    walletPortfolioValue
   }
 }

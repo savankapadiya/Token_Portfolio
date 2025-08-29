@@ -3,44 +3,69 @@ import {
     PieChart,
     Pie,
     Cell,
-    Label,
     ResponsiveContainer,
 } from "recharts"
 
 import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardContent,
-} from "@/components/ui/card"
-import {
     ChartContainer,
     ChartTooltip,
     ChartTooltipContent,
-    ChartLegend,
-    ChartLegendContent,
     type ChartConfig,
 } from "@/components/ui/chart"
 
-// Portfolio data
-const portfolioData = [
-    { name: "Bitcoin (BTC)", value: 21, color: "#10B981" },   // green
-    { name: "Ethereum (ETH)", value: 64.6, color: "#A78BFA" },// purple
-    { name: "Solana (SOL)", value: 14.4, color: "#FB923C" },  // orange
-    { name: "Solana (SOL)", value: 14.4, color: "#60A5FA" },  // sky blue
-    { name: "Solana (SOL)", value: 14.4, color: "#FB7185" },  // pink
-    { name: "Dogecoin (DOGE)", value: 14.4, color: "#18C9DD" },// teal
-]
+interface PortfolioChartProps {
+    tokenList: Array<{
+        id: string
+        name: string
+        symbol: string
+        current_price: number
+        value: string
+        holdings: string
+    }>
+}
+
+const colors = ["#10B981", "#A78BFA", "#FB923C", "#60A5FA", "#FB7185", "#18C9DD", "#F59E0B", "#EF4444"]
 
 const chartConfig = {
     value: { label: "Percentage" },
-    BTC: { label: "Bitcoin", color: "#10B981" },
-    ETH: { label: "Ethereum", color: "#A78BFA" },
-    SOL: { label: "Solana", color: "#2563eb" },
-    DOGE: { label: "Dogecoin", color: "#18C9DD" },
 } satisfies ChartConfig
 
-export default function PortfolioChart() {
+export default function PortfolioChart({ tokenList = [] }: PortfolioChartProps) {
+    const portfolioData = React.useMemo(() => {
+        if (tokenList.length === 0) return []
+        
+        const totalValue = tokenList.reduce((sum, token) => {
+            const value = parseFloat(token.value.replace('$', '').replace(/,/g, '')) || 0
+            return sum + value
+        }, 0)
+        
+        if (totalValue === 0) return []
+        
+        return tokenList.map((token, index) => {
+            const value = parseFloat(token.value.replace('$', '').replace(/,/g, '')) || 0
+            const percentage = (value / totalValue) * 100
+            
+            return {
+                name: `${token.name.split(' (')[0]} (${token.symbol})`,
+                value: percentage,
+                color: colors[index % colors.length],
+                dollarValue: token.value
+            }
+        }).filter(item => item.value > 0)
+    }, [tokenList])
+
+    if (portfolioData.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full w-full lg:w-fit">
+                <span className="text-base text-[#A1A1AA] font-medium mb-2 self-start">Portfolio Total</span>
+                <div className="flex flex-col items-center justify-center gap-4 w-full min-h-[200px]">
+                    <span className="text-sm text-[#A1A1AA]">No portfolio data available</span>
+                    <span className="text-xs text-[#A1A1AA]">Add tokens with holdings to see chart</span>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col items-center justify-center h-full w-full lg:w-fit">
             <span className="text-base text-[#A1A1AA] font-medium mb-2 self-start">Portfolio Total</span>
@@ -64,12 +89,11 @@ export default function PortfolioChart() {
                         </PieChart>
                     </ResponsiveContainer>
                 </ChartContainer>
-                {/* Portfolio Data List with Color Text, vertical alignment */}
                 <div className="flex flex-col gap-4 w-full lg:w-fit">
                     {portfolioData.map((d, idx) => (
                         <div key={idx} className="flex items-center justify-between w-full">
                             <span className="text-sm font-medium lg:w-[229px] w-full" style={{ color: d.color }}>{d.name}</span>
-                            <span className="text-sm font-medium text-[#A1A1AA] lg:w-[229px] w-full text-right" >{d.value}%</span>
+                            <span className="text-sm font-medium text-[#A1A1AA] lg:w-[229px] w-full text-right">{d.value.toFixed(1)}%</span>
                         </div>
                     ))}
                 </div>

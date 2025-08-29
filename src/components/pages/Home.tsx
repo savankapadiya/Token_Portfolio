@@ -4,10 +4,10 @@ import logo from '@/assets/logo.svg';
 import PortfolioChart from '../common/PieChart';
 import TableComponent from '../common/TableComponent';
 import { WalletConnectModal } from '../wallet/WalletConnectModal';
-import { usePortfolio } from '@/hooks/usePortfolio';
+import { useReduxPortfolio } from '@/hooks/useReduxPortfolio';
 
 const Home = () => {
-    const { portfolioTotal, lastUpdated, isLoading, isConnected, balance, symbol } = usePortfolio();
+    const { tokens, portfolioTotal, lastUpdated, isLoading, isConnected, balance, symbol } = useReduxPortfolio();
 
     return (
         <React.Fragment>
@@ -53,7 +53,7 @@ const Home = () => {
                                 Last updated: {lastUpdated}
                             </span>
                         </div>
-                        <PortfolioChart />
+                        <PortfolioChart tokenList={tokens} />
                     </div>
                     {/* Table Section */}
                     <TableComponent />

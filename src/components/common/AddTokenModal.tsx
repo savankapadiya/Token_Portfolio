@@ -41,6 +41,13 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd }) =
   // Fetch trending coins on modal open
   useEffect(() => {
     if (open) {
+      console.log('🚀 Modal opened - fetching trending coins...');
+      // Reset state when opening
+      setTrendingCoins([]);
+      setSearchResults([]);
+      setSearch('');
+      setSelected([]);
+      // Fetch trending coins immediately without any delay
       fetchTrendingCoins();
     }
   }, [open]);
@@ -69,16 +76,24 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd }) =
 
   const fetchTrendingCoins = async () => {
     try {
+      console.log('📡 Starting fetchTrendingCoins...');
       setIsLoading(true);
+      
       const trending = await coinGeckoService.getTrendingCoins();
+      console.log('📊 Trending API response:', trending);
+      
       if (trending?.coins) {
         const trendingTokens = trending.coins.slice(0, 7).map((coin: TrendingToken) => coin.item);
+        console.log('✅ Trending tokens processed:', trendingTokens.length, trendingTokens);
         setTrendingCoins(trendingTokens);
+      } else {
+        console.log('❌ No trending coins data received');
       }
     } catch (error) {
-      console.error('Error fetching trending coins:', error);
+      console.error('❌ Error fetching trending coins:', error);
     } finally {
       setIsLoading(false);
+      console.log('🏁 fetchTrendingCoins completed');
     }
   };
 

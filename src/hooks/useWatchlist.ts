@@ -20,51 +20,38 @@ const WATCHLIST_STORAGE_KEY = 'portfolio-watchlist'
 const HOLDINGS_STORAGE_KEY = 'portfolio-holdings'
 
 export const useWatchlist = (initialTokens: Token[]) => {
-  const [tokenList, setTokenList] = useState<Token[]>([])
+  const [allTokens, setAllTokens] = useState<Token[]>([]) // Store all fetched tokens
+  const [tokenList, setTokenList] = useState<Token[]>([]) // Current page tokens
   const [holdings, setHoldings] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const itemsPerPage = 10
 
-  // Default coin IDs for initial watchlist
-  const defaultCoinIds = ['bitcoin', 'ethereum', 'solana', 'dogecoin', 'usd-coin', 'stellar']
 
-  // Load watchlist IDs from localStorage
-  const getStoredWatchlistIds = (): string[] => {
-    const stored = localStorage.getItem(WATCHLIST_STORAGE_KEY)
-    if (stored) {
-      try {
-        const parsedData = JSON.parse(stored)
-        return parsedData.map((token: any) => token.id || token.name?.toLowerCase() || '')
-      } catch {
-        return defaultCoinIds
-      }
-    }
-    return defaultCoinIds
-  }
 
-  // Load holdings from localStorage
-  const getStoredHoldings = (): string[] => {
-    const stored = localStorage.getItem(HOLDINGS_STORAGE_KEY)
-    if (stored) {
-      try {
-        return JSON.parse(stored)
-      } catch {
-        return defaultCoinIds.map(() => '0.0000')
-      }
-    }
-    return defaultCoinIds.map(() => '0.0000')
-  }
-
-  // Fetch token data from CoinGecko
-  const fetchTokenData = async (coinIds: string[] = defaultCoinIds) => {
+  // Fetch token data from CoinGecko market API (fetch larger dataset for frontend pagination)
+  const fetchTokenData = async (forceRefresh = false) => {
     try {
+      console.log('Setting loading state...')
       setIsLoading(true)
       setError(null)
       
-      const data = await coinGeckoService.getCoinsByIds(coinIds)
+      console.log('Fetching token data for table...')
+      // Fetch 100 coins for frontend pagination
+      const data = await coinGeckoService.getMarketData(1, 100, forceRefresh)
       
       if (data && data.length > 0) {
-        const formattedTokens = data.map((coin: any) => ({
+        const formattedTokens = data.map((coin: { 
+          id: string; 
+          image: string; 
+          name: string; 
+          symbol: string; 
+          current_price: number; 
+          price_change_percentage_24h: number; 
+          sparkline_in_7d?: { price: number[] };
+        }) => ({
           id: coin.id,
           icon: coin.image,
           name: `${coin.name} (${coin.symbol.toUpperCase()})`,
@@ -72,8 +59,8 @@ export const useWatchlist = (initialTokens: Token[]) => {
           price: `$${coin.current_price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`,
           change: `${coin.price_change_percentage_24h >= 0 ? '+' : ''}${coin.price_change_percentage_24h?.toFixed(2) || '0.00'}%`,
           spark: coin.sparkline_in_7d?.price ? 
-            coin.sparkline_in_7d.price.slice(-20).map((price: number, index: number) => ({ value: price })) : 
-            Array.from({ length: 20 }, (_, i) => ({ value: Math.random() * 100 + 50 })),
+            coin.sparkline_in_7d.price.slice(-20).map((price: number) => ({ value: price })) : 
+            Array.from({ length: 20 }, () => ({ value: Math.random() * 100 + 50 })),
           holdings: '0.0000',
           value: '$0.00',
           current_price: coin.current_price || 0,
@@ -81,16 +68,14 @@ export const useWatchlist = (initialTokens: Token[]) => {
           sparkline_in_7d: coin.sparkline_in_7d
         }))
         
-        setTokenList(formattedTokens)
+        setAllTokens(formattedTokens)
         
-        // Initialize or restore holdings
-        const storedHoldings = getStoredHoldings()
-        if (storedHoldings.length === formattedTokens.length) {
-          setHoldings(storedHoldings)
-        } else {
-          const newHoldings = formattedTokens.map(() => '0.0000')
-          setHoldings(newHoldings)
-        }
+        // Calculate total pages based on fetched data
+        setTotalPages(Math.ceil(formattedTokens.length / itemsPerPage))
+        
+        // Initialize holdings for all tokens
+        const newHoldings = formattedTokens.map(() => '0.0000')
+        setHoldings(newHoldings)
       }
     } catch (err) {
       console.error('Error fetching token data:', err)
@@ -99,15 +84,25 @@ export const useWatchlist = (initialTokens: Token[]) => {
       setTokenList(initialTokens)
       setHoldings(initialTokens.map(t => t.holdings))
     } finally {
+      console.log('Turning off loading state...')
       setIsLoading(false)
     }
   }
 
   // Initialize data on mount
   useEffect(() => {
-    const storedIds = getStoredWatchlistIds()
-    fetchTokenData(storedIds)
+    fetchTokenData() // Fetch all tokens once
   }, [])
+
+  // Update displayed tokens when page or allTokens changes
+  useEffect(() => {
+    if (allTokens.length > 0) {
+      const startIndex = (currentPage - 1) * itemsPerPage
+      const endIndex = startIndex + itemsPerPage
+      const pageTokens = allTokens.slice(startIndex, endIndex)
+      setTokenList(pageTokens)
+    }
+  }, [currentPage, allTokens])
 
   // Save to localStorage whenever tokenList changes
   useEffect(() => {
@@ -149,7 +144,15 @@ export const useWatchlist = (initialTokens: Token[]) => {
       const newTokensData = await coinGeckoService.getCoinsByIds(coinIds)
       
       if (newTokensData && newTokensData.length > 0) {
-        const formattedNewTokens = newTokensData.map((coin: any) => ({
+        const formattedNewTokens = newTokensData.map((coin: { 
+          id: string; 
+          image: string; 
+          name: string; 
+          symbol: string; 
+          current_price: number; 
+          price_change_percentage_24h: number; 
+          sparkline_in_7d?: { price: number[] };
+        }) => ({
           id: coin.id,
           icon: coin.image,
           name: `${coin.name} (${coin.symbol.toUpperCase()})`,
@@ -167,7 +170,7 @@ export const useWatchlist = (initialTokens: Token[]) => {
         }))
 
         // Filter out duplicates
-        const newTokens = formattedNewTokens.filter(newToken => 
+        const newTokens = formattedNewTokens.filter((newToken: Token) => 
           !tokenList.some(existingToken => existingToken.id === newToken.id)
         )
 
@@ -198,9 +201,30 @@ export const useWatchlist = (initialTokens: Token[]) => {
   }
 
   const refreshPrices = async () => {
-    const currentIds = tokenList.map(token => token.id)
-    if (currentIds.length > 0) {
-      await fetchTokenData(currentIds)
+    if (isLoading) {
+      console.log('Already loading, skipping refresh...')
+      return
+    }
+    
+    console.log('Refresh button clicked - calling market API...')
+    await fetchTokenData(true) // Refresh all tokens with cache bypass
+  }
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
+  }
+
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1)
+    }
+  }
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1)
     }
   }
 
@@ -216,11 +240,16 @@ export const useWatchlist = (initialTokens: Token[]) => {
     holdings,
     isLoading,
     error,
+    currentPage,
+    totalPages,
     addToken,
     addTokens,
     removeToken,
     updateHolding,
     refreshPrices,
-    clearWatchlist
+    clearWatchlist,
+    goToPage,
+    nextPage,
+    prevPage
   }
 }
