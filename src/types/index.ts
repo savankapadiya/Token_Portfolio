@@ -21,4 +21,5 @@ export interface PortfolioState {
   lastUpdated: string
   isLoading: boolean
   error: string | null
+  currentAddress?: string
 }

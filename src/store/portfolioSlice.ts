@@ -3,10 +3,11 @@ import type { PayloadAction } from '@reduxjs/toolkit'
 import type { Token, PortfolioState } from '@/types'
 import { coinGeckoService } from '@/services/coinGeckoService'
 
-const defaultCoinIds = ['bitcoin', 'ethereum', 'solana', 'dogecoin', 'usd-coin', 'stellar']
+const getWatchlistStorageKey = (address?: string) => 
+  address ? `portfolio-watchlist-${address.toLowerCase()}` : 'portfolio-watchlist-default'
 
-const WATCHLIST_STORAGE_KEY = 'portfolio-watchlist'
-const HOLDINGS_STORAGE_KEY = 'portfolio-holdings'
+const getHoldingsStorageKey = (address?: string) => 
+  address ? `portfolio-holdings-${address.toLowerCase()}` : 'portfolio-holdings-default'
 
 export const fetchTokens = createAsyncThunk(
   'portfolio/fetchTokens',
@@ -93,12 +94,13 @@ const calculatePortfolioTotal = (tokens: Token[], holdings: Record<string, strin
 
 const initialState: PortfolioState = {
   tokens: [],
-  holdings: loadFromStorage(HOLDINGS_STORAGE_KEY, {}),
-  watchlist: loadFromStorage(WATCHLIST_STORAGE_KEY, defaultCoinIds),
+  holdings: {},
+  watchlist: [],
   portfolioTotal: 0,
   lastUpdated: new Date().toISOString(),
   isLoading: false,
-  error: null
+  error: null,
+  currentAddress: undefined
 }
 
 const portfolioSlice = createSlice({
@@ -118,14 +120,14 @@ const portfolioSlice = createSlice({
       state.portfolioTotal = calculatePortfolioTotal(state.tokens, state.holdings)
       state.lastUpdated = new Date().toISOString()
       
-      saveToStorage(HOLDINGS_STORAGE_KEY, state.holdings)
+      saveToStorage(getHoldingsStorageKey(state.currentAddress), state.holdings)
     },
     
     addToWatchlist: (state, action: PayloadAction<string>) => {
       const tokenId = action.payload
       if (!state.watchlist.includes(tokenId)) {
         state.watchlist.push(tokenId)
-        saveToStorage(WATCHLIST_STORAGE_KEY, state.watchlist)
+        saveToStorage(getWatchlistStorageKey(state.currentAddress), state.watchlist)
       }
     },
     
@@ -147,8 +149,8 @@ const portfolioSlice = createSlice({
       state.portfolioTotal = calculatePortfolioTotal(state.tokens, state.holdings)
       state.lastUpdated = new Date().toISOString()
       
-      saveToStorage(WATCHLIST_STORAGE_KEY, state.watchlist)
-      saveToStorage(HOLDINGS_STORAGE_KEY, state.holdings)
+      saveToStorage(getWatchlistStorageKey(state.currentAddress), state.watchlist)
+      saveToStorage(getHoldingsStorageKey(state.currentAddress), state.holdings)
     },
     
     clearPortfolio: (state) => {
@@ -158,8 +160,20 @@ const portfolioSlice = createSlice({
       state.portfolioTotal = 0
       state.lastUpdated = new Date().toISOString()
       
-      localStorage.removeItem(WATCHLIST_STORAGE_KEY)
-      localStorage.removeItem(HOLDINGS_STORAGE_KEY)
+      // Only remove from localStorage if there's a current address
+      if (state.currentAddress) {
+        localStorage.removeItem(getWatchlistStorageKey(state.currentAddress))
+        localStorage.removeItem(getHoldingsStorageKey(state.currentAddress))
+      }
+    },
+    
+    clearTokensOnly: (state) => {
+      state.tokens = []
+      state.holdings = {}
+      state.watchlist = []
+      state.portfolioTotal = 0
+      state.lastUpdated = new Date().toISOString()
+      // Don't remove from localStorage - just clear the state
     },
     
     updateLastRefresh: (state) => {
@@ -168,6 +182,26 @@ const portfolioSlice = createSlice({
     
     clearError: (state) => {
       state.error = null
+    },
+    
+    loadWalletData: (state, action: PayloadAction<string | undefined>) => {
+      const address = action.payload
+      const previousAddress = state.currentAddress
+      
+      // If switching between different wallets (not just connecting/disconnecting)
+      if (address && previousAddress && address !== previousAddress) {
+        // Clear tokens when switching wallets
+        state.tokens = []
+      }
+      
+      state.currentAddress = address
+      const watchlistKey = getWatchlistStorageKey(address)
+      const holdingsKey = getHoldingsStorageKey(address)
+      
+      state.holdings = loadFromStorage(holdingsKey, {})
+      state.watchlist = loadFromStorage(watchlistKey, [])
+      state.portfolioTotal = calculatePortfolioTotal(state.tokens, state.holdings)
+      state.lastUpdated = new Date().toISOString()
     }
   },
   extraReducers: (builder) => {
@@ -224,8 +258,8 @@ const portfolioSlice = createSlice({
           state.portfolioTotal = calculatePortfolioTotal(state.tokens, state.holdings)
         state.lastUpdated = new Date().toISOString()
         
-          saveToStorage(WATCHLIST_STORAGE_KEY, state.watchlist)
-        saveToStorage(HOLDINGS_STORAGE_KEY, state.holdings)
+          saveToStorage(getWatchlistStorageKey(state.currentAddress), state.watchlist)
+        saveToStorage(getHoldingsStorageKey(state.currentAddress), state.holdings)
       })
       .addCase(addTokensById.rejected, (state, action) => {
         state.isLoading = false
@@ -239,8 +273,10 @@ export const {
   addToWatchlist,
   removeFromWatchlist,
   clearPortfolio,
+  clearTokensOnly,
   updateLastRefresh,
-  clearError
+  clearError,
+  loadWalletData
 } = portfolioSlice.actions
 
 export default portfolioSlice.reducer

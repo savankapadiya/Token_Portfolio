@@ -3,13 +3,14 @@ import { useAccount, useBalance } from 'wagmi'
 import { formatEther } from 'viem'
 import { useAppDispatch, useAppSelector } from './redux'
 import { 
-  fetchTokens, 
   addTokensById, 
   updateHolding, 
   addToWatchlist, 
   removeFromWatchlist, 
   clearPortfolio,
-  updateLastRefresh 
+  clearTokensOnly,
+  updateLastRefresh,
+  loadWalletData
 } from '@/store/portfolioSlice'
 import { coinGeckoService } from '@/services/coinGeckoService'
 
@@ -31,10 +32,20 @@ export const useReduxPortfolio = () => {
   })
 
   useEffect(() => {
-    if (tokens.length === 0) {
-      dispatch(fetchTokens({ page: 1, perPage: 100 }))
+    if (!address) {
+      // If disconnected, clear everything including localStorage
+      dispatch(clearTokensOnly())
+    } else {
+      // Load wallet-specific data
+      dispatch(loadWalletData(address))
     }
-  }, [dispatch, tokens.length])
+  }, [dispatch, address])
+
+  useEffect(() => {
+    if (isConnected && address && watchlist.length > 0 && tokens.length === 0) {
+      dispatch(addTokensById(watchlist))
+    }
+  }, [dispatch, isConnected, address, watchlist, tokens.length])
 
   const formatLastUpdated = (isoString: string) => {
     return new Date(isoString).toLocaleTimeString('en-US', {
@@ -63,7 +74,9 @@ export const useReduxPortfolio = () => {
     
     const promises = []
     
-    promises.push(dispatch(fetchTokens({ page: 1, perPage: 100, forceRefresh: true })))
+    if (watchlist.length > 0) {
+      promises.push(dispatch(addTokensById(watchlist)))
+    }
     
     if (isConnected && address) {
       promises.push(

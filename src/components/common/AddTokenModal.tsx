@@ -139,13 +139,17 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
 
   return (
     <Dialog open={open} onOpenChange={setOpen} >
-      <DialogContent className="bg-[#212124] border-[#333] text-white sm:w-[640px] w-full rounded-xl !p-0">
+      <DialogContent 
+        className="bg-[#212124] border-[#333] text-white sm:w-[640px] w-full rounded-xl !p-0"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Search Bar */}
         <div className="relative">
           <input
             placeholder="Search tokens (e.g., ETH, SOL)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
             className="bg-[#27272A] border-[#333] text-white placeholder:text-[#A1A1AA] rounded-tr-xl rounded-tl-xl border-b-1 overflow-hidden p-4 w-full outline-none"
           />
           {(isSearching || isTyping) && (
@@ -164,7 +168,10 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
         </div>
 
         {/* Token List */}
-        <div className="max-h-80 overflow-y-auto px-2">
+        <div 
+          className="max-h-80 overflow-y-auto px-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           <p className="text-xs text-[#A1A1AA] mb-2 uppercase tracking-wider">
             {search.length > 0 ? 'Search Results' : 'Trending'}
           </p>
@@ -189,7 +196,11 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
               {displayTokens.map((token) => (
                 <div
                   key={token.id}
-                  onClick={() => toggleSelect(token.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSelect(token.id);
+                  }}
                   className={`flex justify-between items-center border border-[#212124] px-3 py-2 rounded-md cursor-pointer mb-1 transition-all duration-150 hover:scale-[0.99] ${selectedTokens.includes(token.id)
                     ? "bg-[#A9E8510F] border border-[#A9E8510F] scale-[0.99]"
                     : "hover:bg-[#27272A]"  
@@ -250,7 +261,11 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
                   ? 'bg-[#A9E851] text-black hover:bg-[#A9E851]/80 hover:text-black hover:scale-105' 
                   : 'bg-transparent text-[#52525B] border border-[#ffffff10] cursor-not-allowed'
               } ${isAdding ? 'opacity-75 cursor-wait' : ''}`}
-              onClick={handleAdd}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleAdd();
+              }}
               disabled={selectedTokens.length === 0 || isLoading || isAdding}
             >
               {isAdding ? (

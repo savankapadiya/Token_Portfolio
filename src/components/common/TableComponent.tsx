@@ -23,7 +23,7 @@ const TableComponent = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [tempHolding, setTempHolding] = useState<string>('');
-    const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
+    const [modalSelectedTokens, setModalSelectedTokens] = useState<string[]>([]);
     const itemsPerPage = 10;
 
     const {
@@ -31,6 +31,7 @@ const TableComponent = () => {
         holdings,
         isLoading,
         error,
+        isConnected,
         addTokens,
         updateTokenHolding,
         removeTokenFromWatchlist,
@@ -55,7 +56,7 @@ const TableComponent = () => {
 
     const handleAddTokens = useCallback(async (coinIds: string[]) => {
         await addTokens(coinIds);
-        setSelectedTokens([]);
+        setModalSelectedTokens([]);
     }, [addTokens]);
 
     const handleRefreshPrices = useCallback(async () => {
@@ -86,31 +87,33 @@ const TableComponent = () => {
     }, [currentPage, totalPages]);
 
     return (
-        <div className={`rounded-lg p-6 mt-8 transition-colors duration-300 ${selectedTokens.length > 0 ? 'bg-[#A9E8510A] border border-[#A9E85120]' : 'bg-[#212124]'}`}>
+        <div className="rounded-lg p-6 mt-8 transition-colors duration-300 bg-[#212124]">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <Star 
-                        fill={selectedTokens.length > 0 ? "#A9E851" : "#A9E851"} 
-                        color={selectedTokens.length > 0 ? "#A9E851" : "#A9E851"} 
+                        fill="#A9E851" 
+                        color="#A9E851" 
                         size={28} 
                     />
                     <span className="text-white font-semibold text-2xl">Watchlist</span>
                 </div>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        className="bg-[#27272A] text-white border border-[#333] hover:bg-[#27272A] hover:text-white"
-                        onClick={handleRefreshPrices}
-                        disabled={isLoading}
-                    >
-                        <RefreshCw size={15} className={`text-[#A1A1AA] ${isLoading ? 'animate-spin' : ''}`} />
-                        <span className="hidden lg:block">{isLoading ? 'Refreshing...' : 'Refresh Prices'}</span>
-                    </Button>
-                    <Button className="bg-[#A9E851] text-black font-semibold hover:bg-[#A9E851]/80 hover:text-black" onClick={() => setIsModalOpen(true)}>
-                        <Plus size={15} /> Add Token
-                    </Button>
-                </div>
+                {isConnected && (
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            className="bg-[#27272A] text-white border border-[#333] hover:bg-[#27272A] hover:text-white"
+                            onClick={handleRefreshPrices}
+                            disabled={isLoading}
+                        >
+                            <RefreshCw size={15} className={`text-[#A1A1AA] ${isLoading ? 'animate-spin' : ''}`} />
+                            <span className="hidden lg:block">{isLoading ? 'Refreshing...' : 'Refresh Prices'}</span>
+                        </Button>
+                        <Button className="bg-[#A9E851] text-black font-semibold hover:bg-[#A9E851]/80 hover:text-black" onClick={() => setIsModalOpen(true)}>
+                            <Plus size={15} /> Add Token
+                        </Button>
+                    </div>
+                )}
             </div>
             <div className="border border-[#ebebeb24]  rounded-2xl lg:overflow-hidden overflow-x-auto">
                 {/* Loading State */}
@@ -124,10 +127,17 @@ const TableComponent = () => {
                     <div className="flex flex-col items-center justify-center py-16 text-[#A1A1AA]">
                         <Star size={48} className="mb-4 text-[#333]" />
                         <h3 className="text-lg font-medium text-white mb-2">Your watchlist is empty</h3>
-                        <p className="text-sm mb-6 text-center max-w-md">Start tracking your favorite tokens by adding them to your watchlist. Click "Add Token" to get started.</p>
-                        <Button className="bg-[#A9E851] text-black font-semibold hover:bg-[#A9E851]/80 hover:text-black" onClick={() => setIsModalOpen(true)}>
-                            <Plus size={16} className="mr-2" /> Add Your First Token
-                        </Button>
+                        <p className="text-sm mb-6 text-center max-w-md">
+                            {isConnected 
+                                ? "Start tracking your favorite tokens by adding them to your watchlist. Click \"Add Token\" to get started."
+                                : "Connect your wallet to start tracking your favorite tokens and building your personalized watchlist."
+                            }
+                        </p>
+                        {isConnected && (
+                            <Button className="bg-[#A9E851] text-black font-semibold hover:bg-[#A9E851]/80 hover:text-black" onClick={() => setIsModalOpen(true)}>
+                                <Plus size={16} className="mr-2" /> Add Your First Token
+                            </Button>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -333,8 +343,8 @@ const TableComponent = () => {
                 open={isModalOpen} 
                 setOpen={setIsModalOpen} 
                 onAdd={handleAddTokens}
-                selectedTokens={selectedTokens}
-                setSelectedTokens={setSelectedTokens}
+                selectedTokens={modalSelectedTokens}
+                setSelectedTokens={setModalSelectedTokens}
             />
 
             {error && (
