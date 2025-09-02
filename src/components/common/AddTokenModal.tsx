@@ -37,7 +37,6 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, onR
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -47,20 +46,12 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, onR
       setSelectedTokens(watchlist);
       setError(null);
       setIsAdding(false);
-      setIsTyping(false);
       fetchTrendingCoins();
     }
   }, [open, watchlist]);
 
   useEffect(() => {
-    if (search.length > 0) {
-      setIsTyping(true);
-    } else {
-      setIsTyping(false);
-    }
-
     const searchTimer = setTimeout(async () => {
-      setIsTyping(false);
       
       if (search.length === 0) {
         setSearchResults([]);
