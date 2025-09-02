@@ -11,8 +11,8 @@ const Home = () => {
 
     return (
         <React.Fragment>
-            <div className="bg-[#212124] min-h-screen">
-                <nav className="p-3 flex justify-between items-center">
+            <div className="bg-[#212124] min-h-screen overflow-y-auto">
+                <nav className="p-3 flex justify-between items-center sticky top-0 bg-[#212124] z-10">
                     <div className="flex gap-3 items-center">
                         <img src={logo} alt="Logo" width={28} height={28} />
                         <p className="font-semibold text-xl text-white">Token Portfolio</p>
@@ -21,11 +21,11 @@ const Home = () => {
                         <WalletConnectModal />
                     </div>
                 </nav>
-                <div className="lg:p-7 py-4">
-                    <div className="w-full bg-[#27272A] rounded-md flex flex-col lg:flex-row justify-between items-start p-6 lg:gap-19 gap-8 h-full">
-                        <div className="flex flex-col gap-3 justify-between h-full">
+                <div className="lg:p-7 py-4 pb-8">
+                    <div className="w-full bg-[#27272A] rounded-md flex flex-col lg:flex-row justify-between items-start p-6 lg:gap-19 gap-8">
+                        <div className="flex flex-col gap-3 justify-between min-h-[200px]">
                             <div className="flex flex-col gap-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 justify-start">
                                     <span className="font-medium text-base text-[#A1A1AA]">Portfolio Total</span>
                                     {isConnected && (
                                         <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-md border border-green-500/30">
@@ -55,7 +55,6 @@ const Home = () => {
                         </div>
                         <PortfolioChart tokenList={tokens} />
                     </div>
-                    {/* Table Section */}
                     <TableComponent />
                 </div>
             </div>

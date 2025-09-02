@@ -23,11 +23,13 @@ interface AddTokenModalProps {
   open: boolean;
   setOpen: (open: boolean) => void;
   onAdd: (coinIds: string[]) => Promise<void>;
+  onRemove: (coinIds: string[]) => Promise<void>;
   selectedTokens: string[];
   setSelectedTokens: (selected: string[]) => void;
+  watchlist?: string[];
 }
 
-const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, selectedTokens, setSelectedTokens }) => {
+const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, onRemove, selectedTokens, setSelectedTokens, watchlist = [] }) => {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<CoinGeckoToken[]>([]);
   const [trendingCoins, setTrendingCoins] = useState<CoinGeckoToken[]>([]);
@@ -42,13 +44,13 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       setTrendingCoins([]);
       setSearchResults([]);
       setSearch('');
-      setSelectedTokens([]);
+      setSelectedTokens(watchlist);
       setError(null);
       setIsAdding(false);
       setIsTyping(false);
       fetchTrendingCoins();
     }
-  }, [open]);
+  }, [open, watchlist]);
 
   useEffect(() => {
     if (search.length > 0) {
@@ -72,10 +74,9 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       setIsSearching(true);
       try {
         const results = await coinGeckoService.searchCoins(search);
-        setSearchResults(results.slice(0, 10)); // Limit to 10 results
+        setSearchResults(results.slice(0, 10));
         setError(null);
       } catch (error) {
-        console.error('Search error:', error);
         setSearchResults([]);
         setError('Failed to search tokens. Please try again.');
       } finally {
@@ -98,7 +99,6 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
         setTrendingCoins(trendingTokens);
       }
     } catch (error) {
-      console.error('Trending coins error:', error);
       setError('Failed to load trending tokens. Please refresh to try again.');
     } finally {
       setIsLoading(false);
@@ -113,11 +113,19 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
   }, [selectedTokens]);
 
   const handleAdd = async () => {
-    if (selectedTokens.length === 0) return;
-    
     try {
       setIsAdding(true);
-      await onAdd(selectedTokens);
+      
+      const tokensToAdd = selectedTokens.filter(token => !watchlist.includes(token));
+      const tokensToRemove = watchlist.filter(token => !selectedTokens.includes(token));
+      
+      if (tokensToAdd.length > 0) {
+        await onAdd(tokensToAdd);
+      }
+      
+      if (tokensToRemove.length > 0) {
+        await onRemove(tokensToRemove);
+      }
       
       setSelectedTokens([]);
       setSearch("");
@@ -125,8 +133,7 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       setError(null);
       setOpen(false);
     } catch (error) {
-      console.error('Add tokens error:', error);
-      setError('Failed to add tokens. Please try again.');
+      setError('Failed to update tokens. Please try again.');
     } finally {
       setIsAdding(false);
     }
@@ -142,8 +149,8 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
       <DialogContent 
         className="bg-[#212124] border-[#333] text-white sm:w-[640px] w-full rounded-xl !p-0"
         onClick={(e) => e.stopPropagation()}
+        showCloseButton={!isSearching}
       >
-        {/* Search Bar */}
         <div className="relative">
           <input
             placeholder="Search tokens (e.g., ETH, SOL)..."
@@ -152,22 +159,8 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
             onClick={(e) => e.stopPropagation()}
             className="bg-[#27272A] border-[#333] text-white placeholder:text-[#A1A1AA] rounded-tr-xl rounded-tl-xl border-b-1 overflow-hidden p-4 w-full outline-none"
           />
-          {(isSearching || isTyping) && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              {isSearching ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#A9E851]"></div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <div className="w-1 h-1 bg-[#A9E851] rounded-full animate-pulse"></div>
-                  <div className="w-1 h-1 bg-[#A9E851] rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                  <div className="w-1 h-1 bg-[#A9E851] rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Token List */}
         <div 
           className="max-h-80 overflow-y-auto px-2"
           onClick={(e) => e.stopPropagation()}
@@ -176,7 +169,6 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
             {search.length > 0 ? 'Search Results' : 'Trending'}
           </p>
 
-          {/* Error State */}
           {error && (
             <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg animate-in fade-in-0">
               <div className="flex items-start gap-2">
@@ -186,10 +178,10 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
             </div>
           )}
 
-          {isLoading && displayTokens.length === 0 ? (
+          {(isLoading && displayTokens.length === 0) || isSearching ? (
             <div className="text-center py-8 text-[#A1A1AA] text-sm">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#A9E851] mx-auto mb-2"></div>
-              Loading tokens...
+              {isSearching ? 'Searching tokens...' : 'Loading tokens...'}
             </div>
           ) : (
             <>
@@ -244,7 +236,7 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
                 </div>
               ))}
 
-              {!isLoading && !error && displayTokens.length === 0 && (
+              {!isLoading && !isSearching && !error && displayTokens.length === 0 && (
                 <div className="text-center py-8 text-[#A1A1AA] text-sm">
                   {search.length > 0 ? 'No tokens found' : 'No trending tokens available'}
                 </div>
@@ -253,11 +245,10 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end  w-full bg-[#27272A] px-4 py-3 rounded-bl-xl rounded-br-xl ">
             <button
               className={`font-medium px-3 py-1.5 rounded-sm w-fit text-sm transition-all duration-150 ${
-                selectedTokens.length > 0 && !isAdding
+                !isAdding
                   ? 'bg-[#A9E851] text-black hover:bg-[#A9E851]/80 hover:text-black hover:scale-105' 
                   : 'bg-transparent text-[#52525B] border border-[#ffffff10] cursor-not-allowed'
               } ${isAdding ? 'opacity-75 cursor-wait' : ''}`}
@@ -266,15 +257,15 @@ const AddTokenModal: React.FC<AddTokenModalProps> = ({ open, setOpen, onAdd, sel
                 e.stopPropagation();
                 handleAdd();
               }}
-              disabled={selectedTokens.length === 0 || isLoading || isAdding}
+              disabled={isLoading || isAdding}
             >
               {isAdding ? (
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-3 w-3 border-b border-black"></div>
-                  Adding...
+                  Updating...
                 </div>
               ) : (
-                `Add ${selectedTokens.length} to Watchlist`
+                'Update Watchlist'
               )}
             </button>
         </div>

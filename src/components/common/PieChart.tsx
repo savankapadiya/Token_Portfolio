@@ -56,9 +56,9 @@ export default function PortfolioChart({ tokenList = [] }: PortfolioChartProps) 
 
     if (portfolioData.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-full w-full lg:w-fit">
-                <span className="text-base text-[#A1A1AA] font-medium mb-2 self-start">Portfolio Total</span>
-                <div className="flex flex-col items-center justify-center gap-4 w-full min-h-[200px]">
+            <div className="flex flex-col items-start justify-center h-full w-full lg:w-fit">
+                <span className="text-base text-[#A1A1AA] font-medium mb-2 text-left">Portfolio Total</span>
+                <div className="flex flex-col items-start justify-center gap-2 w-full min-h-[200px] text-center">
                     <span className="text-sm text-[#A1A1AA]">No portfolio data available</span>
                     <span className="text-xs text-[#A1A1AA]">Add tokens with holdings to see chart</span>
                 </div>
@@ -67,8 +67,8 @@ export default function PortfolioChart({ tokenList = [] }: PortfolioChartProps) 
     }
 
     return (
-        <div className="flex flex-col items-center justify-center h-full w-full lg:w-fit">
-            <span className="text-base text-[#A1A1AA] font-medium mb-2 self-start">Portfolio Total</span>
+        <div className="flex flex-col items-start justify-center h-full w-full lg:w-fit">
+            <span className="text-base text-[#A1A1AA] font-medium mb-2">Portfolio Total</span>
             <div className="flex lg:flex-row flex-col items-center gap-4 w-full">
                 <ChartContainer config={chartConfig} className="lg:w-[180px] w-[270px] lg:h-[180px] h-[200px] flex items-center justify-center">
                     <ResponsiveContainer width="100%" height="100%">

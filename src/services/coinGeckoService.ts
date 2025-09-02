@@ -416,7 +416,6 @@ const markRateLimited = (): void => {
 export const getCoinsByIds = async (ids: string[]) => {
   try {
     const idsString = ids.join(',');
-    console.log('Fetching coins by IDs:', idsString);
     const endpoint = `/coins/markets?ids=${idsString}&vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=24h`;
     const url = getApiUrl(endpoint, false);
     

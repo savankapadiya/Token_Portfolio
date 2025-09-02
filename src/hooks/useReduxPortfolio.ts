@@ -33,10 +33,8 @@ export const useReduxPortfolio = () => {
 
   useEffect(() => {
     if (!address) {
-      // If disconnected, clear everything including localStorage
       dispatch(clearTokensOnly())
     } else {
-      // Load wallet-specific data
       dispatch(loadWalletData(address))
     }
   }, [dispatch, address])

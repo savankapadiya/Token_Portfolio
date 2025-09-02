@@ -51,14 +51,18 @@ export const WalletConnectModal: React.FC = () => {
 
               return (
                 <div className="flex items-center gap-2">
-                  <div className="bg-green-500/20 border border-green-500/30 rounded-md px-3 py-2">
-                    <span className="text-green-400 text-[13px] font-medium">
-                      {account.displayName}
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-md px-4 py-2 text-sm font-semibold flex items-center group relative">
+                    <span className="text-green-400 text-[13px] font-semibold">
+                      <span className="sm:hidden">{account.displayName?.slice(0, 4)}...</span>
+                      <span className="hidden sm:inline">{account.displayName}</span>
                     </span>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap sm:hidden">
+                      {account.displayName}
+                    </div>
                   </div>
                   <button
                     onClick={openAccountModal}
-                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold"
                   >
                     <span className="text-[13px]">Disconnect</span>
                   </button>

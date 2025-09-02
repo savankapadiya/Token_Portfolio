@@ -160,7 +160,6 @@ const portfolioSlice = createSlice({
       state.portfolioTotal = 0
       state.lastUpdated = new Date().toISOString()
       
-      // Only remove from localStorage if there's a current address
       if (state.currentAddress) {
         localStorage.removeItem(getWatchlistStorageKey(state.currentAddress))
         localStorage.removeItem(getHoldingsStorageKey(state.currentAddress))
@@ -173,7 +172,6 @@ const portfolioSlice = createSlice({
       state.watchlist = []
       state.portfolioTotal = 0
       state.lastUpdated = new Date().toISOString()
-      // Don't remove from localStorage - just clear the state
     },
     
     updateLastRefresh: (state) => {
@@ -188,9 +186,7 @@ const portfolioSlice = createSlice({
       const address = action.payload
       const previousAddress = state.currentAddress
       
-      // If switching between different wallets (not just connecting/disconnecting)
       if (address && previousAddress && address !== previousAddress) {
-        // Clear tokens when switching wallets
         state.tokens = []
       }
       

@@ -29,6 +29,7 @@ const TableComponent = () => {
     const {
         tokens,
         holdings,
+        watchlist,
         isLoading,
         error,
         isConnected,
@@ -59,6 +60,12 @@ const TableComponent = () => {
         setModalSelectedTokens([]);
     }, [addTokens]);
 
+    const handleRemoveTokens = useCallback(async (coinIds: string[]) => {
+        coinIds.forEach(tokenId => {
+            removeTokenFromWatchlist(tokenId);
+        });
+    }, [removeTokenFromWatchlist]);
+
     const handleRefreshPrices = useCallback(async () => {
         setCurrentPage(1);
         await refreshPortfolio();
@@ -87,8 +94,7 @@ const TableComponent = () => {
     }, [currentPage, totalPages]);
 
     return (
-        <div className="rounded-lg p-6 mt-8 transition-colors duration-300 bg-[#212124]">
-            {/* Header */}
+        <div className="rounded-lg p-6 mt-8 bg-[#212124]">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <Star 
@@ -115,15 +121,13 @@ const TableComponent = () => {
                     </div>
                 )}
             </div>
-            <div className="border border-[#ebebeb24]  rounded-2xl lg:overflow-hidden overflow-x-auto">
-                {/* Loading State */}
+            <div className="border border-[#ebebeb24] rounded-2xl lg:overflow-hidden overflow-x-auto">
                 {isLoading && tokens.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-[#A1A1AA]">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#A9E851] mb-4"></div>
                         <p className="text-sm">Loading your watchlist...</p>
                     </div>
                 ) : tokens.length === 0 ? (
-                    /* Empty State */
                     <div className="flex flex-col items-center justify-center py-16 text-[#A1A1AA]">
                         <Star size={48} className="mb-4 text-[#333]" />
                         <h3 className="text-lg font-medium text-white mb-2">Your watchlist is empty</h3>
@@ -141,9 +145,8 @@ const TableComponent = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Table */}
                         <table className="min-w-full text-left text-sm table-fixed">
-                    <thead>
+                            <thead>
                         <tr className="bg-[#27272A] text-[#A1A1AA]">
                             <th className="py-3 px-4 font-medium w-[160px] sm:w-[200px] lg:w-[240px]">
                                 Token
@@ -165,10 +168,9 @@ const TableComponent = () => {
                             </th>
                             <th className="py-3 px-4 font-medium w-[60px]"></th>
                         </tr>
-                    </thead>
+                            </thead>
                             <tbody className="bg-[#212124] text-white">
                                 {isLoading ? (
-                                    /* Loading skeleton rows */
                                     Array.from({ length: itemsPerPage }, (_, idx) => (
                                         <tr key={`skeleton-${idx}`} className="border-b border-[#27272A] animate-pulse">
                                             <td className="py-3 px-4">
@@ -273,9 +275,7 @@ const TableComponent = () => {
                                         ${((parseFloat(holdings[token.id] || '0') * token.current_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
                                     <td className="py-3 px-4 relative">
-                                        <div className="flex items-center gap-2">
-
-                                            <DropdownMenu>
+                                        <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <button className="p-1 hover:bg-[#333] rounded transition-colors duration-150">
                                                         <MoreVertical size={16} className="text-[#A1A1AA]" />
@@ -290,7 +290,7 @@ const TableComponent = () => {
                                                         </svg>
                                                         Edit Holdings
                                                     </DropdownMenuItem>
-                                                        <div className="border-b border-[#444]"></div>
+                                                    <div className="border-b border-[#444]"></div>
                                                     <DropdownMenuItem
                                                         className="text-red-400 cursor-pointer hover:!bg-[#333] hover:!text-red-400 transition-colors duration-150"
                                                         onClick={() => handleRemoveToken(token.id)}
@@ -298,23 +298,20 @@ const TableComponent = () => {
                                                         <Trash2 size={14} className="mr-2" /> Remove
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
+                                        </DropdownMenu>
                                     </td>
                                 </tr>
                             );
                         })
                     )}
-                </tbody>
+                            </tbody>
                         </table>
 
-                        {/* Pagination - only show when there are tokens */}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center text-[#A1A1AA] p-4 text-sm w-full gap-3 sm:gap-5">
-                    <span className="text-center sm:text-left">
+                            <span className="text-center sm:text-left">
                         {paginationInfo.startItem} — {paginationInfo.endItem} of {tokens.length} results
-                    </span>
-
-                    <div className="flex justify-center sm:justify-end gap-2 items-center">
+                            </span>
+                            <div className="flex justify-center sm:justify-end gap-2 items-center">
                         <span>Page {currentPage} of {totalPages}</span>
                         <Button
                             variant="link"
@@ -332,19 +329,19 @@ const TableComponent = () => {
                         >
                             Next
                         </Button>
-                    </div>
+                            </div>
                         </div>
                     </>
                 )}
-
-
             </div>
             <AddTokenModal 
                 open={isModalOpen} 
                 setOpen={setIsModalOpen} 
                 onAdd={handleAddTokens}
+                onRemove={handleRemoveTokens}
                 selectedTokens={modalSelectedTokens}
                 setSelectedTokens={setModalSelectedTokens}
+                watchlist={watchlist}
             />
 
             {error && (
